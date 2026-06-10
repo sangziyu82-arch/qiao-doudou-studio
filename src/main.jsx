@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   FileImage,
   Grid2X2,
+  Heart,
   ImageUp,
   Paintbrush,
   Pipette,
@@ -27,6 +28,8 @@ const publicAsset = (path) => {
   return `${PUBLIC_BASE.replace(/\/?$/, '/')}${path.replace(/^\/+/, '')}`;
 };
 const DEFAULT_REFERENCE = publicAsset('reference.jpg');
+const DONATE_WECHAT = publicAsset('donate-wechat.jpg');
+const DONATE_ALIPAY = publicAsset('donate-alipay.jpg');
 const EMPTY_CELL_COLOR = '#ffffff';
 const makeEmptyGrid = (rows = 18, cols = 18) => Array.from({ length: rows }, () => Array(cols).fill(null));
 
@@ -186,6 +189,7 @@ function App() {
   const [showNumbers, setShowNumbers] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(45);
+  const [donationOpen, setDonationOpen] = useState(false);
   const [tool, setTool] = useState('brush');
   const [selectedColor, setSelectedColor] = useState('#c61818');
   const [highlightColor, setHighlightColor] = useState(null);
@@ -738,6 +742,7 @@ function App() {
             <button onClick={() => setShowNumbers((v) => !v)}><Eye size={16} />编号</button>
             <button onClick={() => fileRef.current?.click()}><Wand2 size={16} />换图</button>
             <button onClick={saveDraft}><Save size={16} />本地草稿</button>
+            <button className="donate-action" onClick={() => setDonationOpen(true)}><Heart size={16} />打赏支持</button>
           </div>
 
           <div className="model-summary">
@@ -776,6 +781,37 @@ function App() {
           </div>
         </aside>
       </div>
+
+      {donationOpen && (
+        <div className="donation-modal" role="dialog" aria-modal="true" aria-label="制作不易欢迎打赏">
+          <div className="donation-dialog">
+            <button className="icon-btn donation-close" onClick={() => setDonationOpen(false)} aria-label="关闭打赏">
+              <X size={18} />
+            </button>
+            <div className="donation-hero">
+              <span><Heart size={18} /> 小小支持</span>
+              <strong>制作不易，欢迎打赏</strong>
+              <p>如果这个敲豆豆工具帮你省了一点点时间，可以请作者喝杯奶茶。感谢每一份可爱的鼓励。</p>
+            </div>
+            <div className="donation-grid">
+              <div className="donation-card wechat">
+                <div>
+                  <strong>微信支付</strong>
+                  <span>推荐使用微信扫一扫</span>
+                </div>
+                <img src={DONATE_WECHAT} alt="微信支付打赏二维码" />
+              </div>
+              <div className="donation-card alipay">
+                <div>
+                  <strong>支付宝</strong>
+                  <span>打开支付宝扫一扫</span>
+                </div>
+                <img src={DONATE_ALIPAY} alt="支付宝打赏二维码" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cropSource && (
         <div className="crop-modal" role="dialog" aria-modal="true" aria-label="裁剪图片">
