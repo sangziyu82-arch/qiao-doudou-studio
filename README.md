@@ -2,6 +2,23 @@
 
 一个面向“敲豆豆 / 拼豆 / 像素底板”的网页工具。它可以把图片转换成可编辑的小格子色块，配合 STL 方块模型生成排布方案，并导出图纸或已经排好位置的 STL 模型。
 
+## 制作不易，欢迎打赏
+
+如果这个敲豆豆工具帮你省了一点点时间，可以请作者喝杯奶茶。感谢每一份可爱的鼓励。
+
+<table>
+  <tr>
+    <td align="center">
+      <strong>微信支付</strong><br />
+      <img src="public/donate-wechat.jpg" alt="微信支付打赏二维码" width="260" />
+    </td>
+    <td align="center">
+      <strong>支付宝</strong><br />
+      <img src="public/donate-alipay.jpg" alt="支付宝打赏二维码" width="260" />
+    </td>
+  </tr>
+</table>
+
 ## 功能亮点
 
 - 图片上传后先裁剪，再按选区生成像素底板。

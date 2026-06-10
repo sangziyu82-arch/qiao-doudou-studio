@@ -189,7 +189,7 @@ function App() {
   const [showNumbers, setShowNumbers] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(45);
-  const [donationOpen, setDonationOpen] = useState(false);
+  const [donationOpen, setDonationOpen] = useState(true);
   const [tool, setTool] = useState('brush');
   const [selectedColor, setSelectedColor] = useState('#c61818');
   const [highlightColor, setHighlightColor] = useState(null);
