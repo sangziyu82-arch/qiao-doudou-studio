@@ -27,6 +27,7 @@ const publicAsset = (path) => {
   return `${PUBLIC_BASE.replace(/\/?$/, '/')}${path.replace(/^\/+/, '')}`;
 };
 const DEFAULT_REFERENCE = publicAsset('reference.jpg');
+const EMPTY_CELL_COLOR = '#ffffff';
 const makeEmptyGrid = (rows = 18, cols = 18) => Array.from({ length: rows }, () => Array(cols).fill(null));
 
 const hexToRgb = (hex) => {
@@ -415,7 +416,7 @@ function App() {
             return null;
           }
           if (tool === 'picker') {
-            if (color) setSelectedColor(color);
+            setSelectedColor(color || EMPTY_CELL_COLOR);
             setTool('brush');
             return color;
           }
