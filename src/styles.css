@@ -498,10 +498,17 @@ button {
   position: absolute;
   inset: 6px;
   z-index: 3;
-  background-repeat: no-repeat;
+  overflow: hidden;
   transition: opacity 160ms ease;
   pointer-events: none;
   mix-blend-mode: multiply;
+}
+
+.image-overlay img {
+  position: absolute;
+  max-width: none;
+  object-fit: fill;
+  user-select: none;
 }
 
 .bead-cell {

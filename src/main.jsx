@@ -233,10 +233,13 @@ function App() {
   const overlaySource = activeSource || imageSrc;
   const overlayCrop = activeCrop || { x: 0, y: 0, w: 100, h: 100 };
   const overlayStyle = {
-    backgroundImage: `url("${overlaySource}")`,
-    backgroundPosition: `${overlayCrop.x}% ${overlayCrop.y}%`,
-    backgroundSize: `${10000 / overlayCrop.w}% ${10000 / overlayCrop.h}%`,
     opacity: showOverlay ? overlayOpacity / 100 : 0
+  };
+  const overlayImageStyle = {
+    width: `${10000 / overlayCrop.w}%`,
+    height: `${10000 / overlayCrop.h}%`,
+    left: `${(-overlayCrop.x / overlayCrop.w) * 100}%`,
+    top: `${(-overlayCrop.y / overlayCrop.h) * 100}%`
   };
 
   useEffect(() => {
@@ -693,7 +696,9 @@ function App() {
                 '--gap': `${Math.max(0, gap)}px`
               }}
             >
-              <div className="image-overlay" style={overlayStyle} aria-hidden="true" />
+              <div className="image-overlay" style={overlayStyle} aria-hidden="true">
+                <img src={overlaySource} alt="" style={overlayImageStyle} draggable="false" />
+              </div>
               {grid.map((row, y) =>
                 row.map((color, x) => {
                   const index = color ? stats.findIndex(([statColor]) => statColor === color) + 1 : '';
