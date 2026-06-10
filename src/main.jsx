@@ -20,28 +20,14 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
-const makeDemoGrid = () => {
-  const rows = 29;
-  const cols = 29;
-  return Array.from({ length: rows }, (_, y) =>
-    Array.from({ length: cols }, (_, x) => {
-      const cx = x - 14;
-      const cy = y - 15;
-      const body = (cx * cx) / 150 + (cy * cy) / 105 < 1;
-      const top = y > 1 && y < 9 && Math.abs(cx) < 2;
-      const leaf =
-        (y > 5 && y < 10 && x > 6 && x < 15) ||
-        (y > 6 && y < 11 && x > 14 && x < 23) ||
-        (y > 8 && y < 13 && x > 3 && x < 9) ||
-        (y > 8 && y < 13 && x > 20 && x < 26);
-      if (top || leaf) return '#207b3d';
-      if (!body) return null;
-      if ((x + y * 2) % 8 === 0) return '#f0d326';
-      if ((x + y) % 19 === 0) return '#7fb07b';
-      return '#c61818';
-    })
-  );
+const PUBLIC_BASE = import.meta.env.BASE_URL || '/';
+const publicAsset = (path) => {
+  if (!path) return '';
+  if (/^(data:|blob:|https?:)/.test(path)) return path;
+  return `${PUBLIC_BASE.replace(/\/?$/, '/')}${path.replace(/^\/+/, '')}`;
 };
+const DEFAULT_REFERENCE = publicAsset('reference.jpg');
+const makeEmptyGrid = (rows = 18, cols = 18) => Array.from({ length: rows }, () => Array(cols).fill(null));
 
 const hexToRgb = (hex) => {
   const value = hex.replace('#', '');
@@ -183,12 +169,12 @@ function App() {
   const exportRef = useRef(null);
   const cropFrameRef = useRef(null);
   const cropDragRef = useRef(null);
-  const [imageSrc, setImageSrc] = useState('/reference.jpg');
+  const [imageSrc, setImageSrc] = useState(DEFAULT_REFERENCE);
   const [cropSource, setCropSource] = useState(null);
-  const [activeSource, setActiveSource] = useState('/reference.jpg');
+  const [activeSource, setActiveSource] = useState(DEFAULT_REFERENCE);
   const [activeCrop, setActiveCrop] = useState(null);
   const [cropRect, setCropRect] = useState({ x: 10, y: 10, w: 80, h: 80 });
-  const [grid, setGrid] = useState(makeDemoGrid);
+  const [grid, setGrid] = useState(() => makeEmptyGrid());
   const [columns, setColumns] = useState(18);
   const [targetWidth, setTargetWidth] = useState(0);
   const [beadSize, setBeadSize] = useState(1);
@@ -208,7 +194,7 @@ function App() {
   const [modelSourceDir, setModelSourceDir] = useState('D:\\下载\\3dmox');
 
   useEffect(() => {
-    fetch('/stl-models.json')
+    fetch(publicAsset('stl-models.json'))
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!data?.models?.length) return;
@@ -241,8 +227,9 @@ function App() {
   const actualWidth = colCount * cellWidth + Math.max(0, colCount - 1) * gap;
   const actualHeight = rowCount * cellHeight + Math.max(0, rowCount - 1) * gap;
   const shareOrigin = ['localhost', '127.0.0.1'].includes(window.location.hostname) ? LAN_ORIGIN : window.location.origin;
-  const modelUrl = selectedModel?.publicUrl ? new URL(encodeURI(selectedModel.publicUrl), shareOrigin).href : '';
-  const modelListUrl = new URL('/stl-models.json', shareOrigin).href;
+  const modelPublicPath = selectedModel?.publicUrl ? publicAsset(selectedModel.publicUrl) : '';
+  const modelUrl = modelPublicPath ? new URL(encodeURI(modelPublicPath), shareOrigin).href : '';
+  const modelListUrl = new URL(publicAsset('stl-models.json'), shareOrigin).href;
   const overlaySource = activeSource || imageSrc;
   const overlayCrop = activeCrop || { x: 0, y: 0, w: 100, h: 100 };
   const overlayStyle = {
@@ -475,7 +462,7 @@ function App() {
       return;
     }
 
-    const response = await fetch(encodeURI(selectedModel.publicUrl));
+    const response = await fetch(encodeURI(modelPublicPath));
     if (!response.ok) {
       alert('无法读取 STL 模型文件，请重新运行 npm run scan-models。');
       return;
@@ -517,9 +504,9 @@ function App() {
   };
 
   const resetDemo = () => {
-    setImageSrc('/reference.jpg');
+    setImageSrc(DEFAULT_REFERENCE);
     setCropSource(null);
-    setActiveSource('/reference.jpg');
+    setActiveSource(DEFAULT_REFERENCE);
     setActiveCrop(null);
     setFileName('snail-demo');
     setColumns(18);
@@ -535,7 +522,7 @@ function App() {
     setShowNumbers(false);
     setShowOverlay(false);
     setOverlayOpacity(45);
-    processImage('/reference.jpg', null);
+    processImage(DEFAULT_REFERENCE, null);
   };
 
   const saveDraft = () => {
