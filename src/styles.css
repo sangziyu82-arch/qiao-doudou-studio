@@ -456,8 +456,8 @@ button {
   display: grid;
   place-items: center;
   margin-top: 12px;
-  padding: 56px 48px 40px 64px;
-  overflow: auto;
+  padding: 48px 42px 32px 58px;
+  overflow: hidden;
   background:
     linear-gradient(#e8edf2 1px, transparent 1px),
     linear-gradient(90deg, #e8edf2 1px, transparent 1px),
@@ -485,10 +485,14 @@ button {
 
 .bead-grid {
   position: relative;
-  width: min(100%, 760px);
+  width: auto;
+  height: min(70vh, 760px);
+  max-width: calc(100% - 8px);
+  max-height: calc(100vh - 188px);
   display: grid;
   gap: var(--gap);
   padding: 6px;
+  box-sizing: border-box;
   background: #255b4c;
   border: 1px solid rgba(13, 59, 49, 0.5);
   box-shadow: 0 14px 28px rgba(14, 45, 39, 0.18);
