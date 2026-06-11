@@ -178,6 +178,7 @@ function App() {
   const [activeSource, setActiveSource] = useState(DEFAULT_REFERENCE);
   const [activeCrop, setActiveCrop] = useState(null);
   const [cropRect, setCropRect] = useState({ x: 10, y: 10, w: 80, h: 80 });
+  const [cropAspect, setCropAspect] = useState(1);
   const [grid, setGrid] = useState(() => makeEmptyGrid());
   const [columns, setColumns] = useState(18);
   const [targetWidth, setTargetWidth] = useState(0);
@@ -344,6 +345,7 @@ function App() {
       setFileName(file.name.replace(/\.[^.]+$/, ''));
       setCropSource(reader.result);
       setCropRect({ x: 10, y: 10, w: 80, h: 80 });
+      setCropAspect(1);
     };
     reader.readAsDataURL(file);
     event.target.value = '';
@@ -824,8 +826,18 @@ function App() {
               <button className="icon-btn" onClick={() => setCropSource(null)} aria-label="关闭裁剪"><X size={18} /></button>
             </div>
             <div className="crop-body">
-              <div className="crop-frame" ref={cropFrameRef}>
-                <img src={cropSource} alt="待裁剪图片" draggable="false" />
+              <div className="crop-frame" ref={cropFrameRef} style={{ aspectRatio: cropAspect }}>
+                <img
+                  src={cropSource}
+                  alt="待裁剪图片"
+                  draggable="false"
+                  onLoad={(event) => {
+                    const img = event.currentTarget;
+                    if (img.naturalWidth && img.naturalHeight) {
+                      setCropAspect(img.naturalWidth / img.naturalHeight);
+                    }
+                  }}
+                />
                 <div className="crop-shade shade-top" style={{ height: `${cropRect.y}%` }} />
                 <div className="crop-shade shade-left" style={{ top: `${cropRect.y}%`, width: `${cropRect.x}%`, height: `${cropRect.h}%` }} />
                 <div className="crop-shade shade-right" style={{ top: `${cropRect.y}%`, left: `${cropRect.x + cropRect.w}%`, height: `${cropRect.h}%` }} />

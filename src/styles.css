@@ -885,6 +885,7 @@ button {
 .crop-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 250px;
+  align-items: start;
   gap: 14px;
   padding: 14px;
   overflow: auto;
@@ -893,9 +894,8 @@ button {
 
 .crop-frame {
   position: relative;
-  min-height: 420px;
-  display: grid;
-  place-items: center;
+  width: 100%;
+  min-height: 0;
   overflow: hidden;
   background:
     linear-gradient(45deg, #dce4e4 25%, transparent 25%),
@@ -912,7 +912,8 @@ button {
 .crop-frame img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  display: block;
+  object-fit: fill;
   user-select: none;
   pointer-events: none;
 }
@@ -1039,6 +1040,11 @@ button {
 }
 
 .crop-controls {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: calc(100vh - 210px);
+  overflow: auto;
   padding: 12px;
   background: #fff;
   border: 1px solid var(--line);
@@ -1149,7 +1155,7 @@ button {
   }
 
   .crop-frame {
-    min-height: 320px;
+    min-height: 0;
   }
 }
 
