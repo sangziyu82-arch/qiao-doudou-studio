@@ -13,6 +13,7 @@ import {
   ImageUp,
   Paintbrush,
   Pipette,
+  Plus,
   RefreshCw,
   Save,
   Sparkles,
@@ -31,7 +32,34 @@ const DEFAULT_REFERENCE = publicAsset('reference.jpg');
 const DONATE_WECHAT = publicAsset('donate-wechat.jpg');
 const DONATE_ALIPAY = publicAsset('donate-alipay.jpg');
 const EMPTY_CELL_COLOR = '#ffffff';
+const MERGED_BLOCK_COLOR = '#ff0000';
 const makeEmptyGrid = (rows = 18, cols = 18) => Array.from({ length: rows }, () => Array(cols).fill(null));
+const isSequentialNumberCell = (color) => Boolean(color) && color.toLowerCase() !== EMPTY_CELL_COLOR;
+const clampGridSize = (value, min, max, fallback) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(number)));
+};
+const markerKey = (row, col) => `${row}-${col}`;
+const parseMarkerKey = (key) => {
+  const [row, col] = key.split('-').map(Number);
+  return { row, col };
+};
+const getMiddleBlockPlacement = (block) => {
+  const points = block.cells.map(parseMarkerKey);
+  const minRow = Math.min(...points.map((point) => point.row));
+  const maxRow = Math.max(...points.map((point) => point.row));
+  const minCol = Math.min(...points.map((point) => point.col));
+  const maxCol = Math.max(...points.map((point) => point.col));
+  return {
+    row: minRow,
+    col: minCol,
+    sortRow: minRow + (maxRow > minRow ? 0.5 : 0),
+    sortCol: minCol + (maxCol > minCol ? 0.5 : 0),
+    isHorizontal: maxCol > minCol,
+    isVertical: maxRow > minRow
+  };
+};
 
 const hexToRgb = (hex) => {
   const value = hex.replace('#', '');
@@ -136,8 +164,8 @@ const parseStlMesh = (arrayBuffer) => {
   return { triangles, bounds };
 };
 
-const createArrangedBinaryStl = (mesh, placements, stepX, stepY, name) => {
-  const triangleCount = mesh.triangles.length * placements.length;
+const createArrangedBinaryStl = (mesh, instances, name) => {
+  const triangleCount = mesh.triangles.length * instances.length;
   const buffer = new ArrayBuffer(84 + triangleCount * 50);
   const view = new DataView(buffer);
   const encoder = new TextEncoder();
@@ -146,17 +174,17 @@ const createArrangedBinaryStl = (mesh, placements, stepX, stepY, name) => {
   view.setUint32(80, triangleCount, true);
 
   let offset = 84;
-  placements.forEach(({ x, y }) => {
-    const tx = x * stepX;
-    const ty = y * stepY;
+  instances.forEach(({ tx, ty }) => {
     mesh.triangles.forEach((triangle) => {
       view.setFloat32(offset, triangle.normal[0], true);
       view.setFloat32(offset + 4, triangle.normal[1], true);
       view.setFloat32(offset + 8, triangle.normal[2], true);
       offset += 12;
       triangle.vertices.forEach((vertex) => {
-        view.setFloat32(offset, vertex[0] - mesh.bounds.minX + tx, true);
-        view.setFloat32(offset + 4, vertex[1] - mesh.bounds.minY + ty, true);
+        const localX = vertex[0] - mesh.bounds.minX;
+        const localY = vertex[1] - mesh.bounds.minY;
+        view.setFloat32(offset, localX + tx, true);
+        view.setFloat32(offset + 4, localY + ty, true);
         view.setFloat32(offset + 8, vertex[2] - mesh.bounds.minZ, true);
         offset += 12;
       });
@@ -173,6 +201,7 @@ function App() {
   const exportRef = useRef(null);
   const cropFrameRef = useRef(null);
   const cropDragRef = useRef(null);
+  const skipNextProcessRef = useRef(false);
   const [imageSrc, setImageSrc] = useState(DEFAULT_REFERENCE);
   const [cropSource, setCropSource] = useState(null);
   const [activeSource, setActiveSource] = useState(DEFAULT_REFERENCE);
@@ -181,6 +210,7 @@ function App() {
   const [cropAspect, setCropAspect] = useState(1);
   const [grid, setGrid] = useState(() => makeEmptyGrid());
   const [columns, setColumns] = useState(18);
+  const [rows, setRows] = useState(18);
   const [targetWidth, setTargetWidth] = useState(0);
   const [beadSize, setBeadSize] = useState(1);
   const [gap, setGap] = useState(0);
@@ -188,10 +218,14 @@ function App() {
   const [threshold, setThreshold] = useState(211);
   const [autoBackground, setAutoBackground] = useState(true);
   const [showNumbers, setShowNumbers] = useState(false);
+  const [numberMode, setNumberMode] = useState('color');
   const [showOverlay, setShowOverlay] = useState(false);
+  const [showCenterGuide, setShowCenterGuide] = useState(true);
   const [overlayOpacity, setOverlayOpacity] = useState(45);
   const [donationOpen, setDonationOpen] = useState(true);
   const [tool, setTool] = useState('brush');
+  const [specialMarkers, setSpecialMarkers] = useState(() => new Set());
+  const [mergedBlocks, setMergedBlocks] = useState([]);
   const [selectedColor, setSelectedColor] = useState('#c61818');
   const [highlightColor, setHighlightColor] = useState(null);
   const [fileName, setFileName] = useState('snail-demo');
@@ -225,6 +259,35 @@ function App() {
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [grid]);
 
+  const sequentialNumbers = useMemo(() => {
+    const map = new Map();
+    const entries = [];
+    grid.forEach((row, y) => {
+      row.forEach((color, x) => {
+        if (!isSequentialNumberCell(color)) return;
+        entries.push({
+          key: markerKey(y, x),
+          sortRow: y,
+          sortCol: x
+        });
+      });
+    });
+    mergedBlocks.forEach((block) => {
+      const placement = getMiddleBlockPlacement(block);
+      entries.push({
+        key: block.id,
+        sortRow: placement.sortRow,
+        sortCol: placement.sortCol
+      });
+    });
+    entries
+      .sort((a, b) => a.sortRow - b.sortRow || a.sortCol - b.sortCol)
+      .forEach((entry, index) => {
+        map.set(entry.key, index + 1);
+      });
+    return map;
+  }, [grid, mergedBlocks]);
+
   const rowCount = grid.length || 0;
   const colCount = grid[0]?.length || 0;
   const beadCount = stats.reduce((sum, [, count]) => sum + count, 0);
@@ -250,8 +313,12 @@ function App() {
 
   useEffect(() => {
     if (!activeSource) return;
+    if (skipNextProcessRef.current) {
+      skipNextProcessRef.current = false;
+      return;
+    }
     processImage(activeSource, activeCrop);
-  }, [columns, colorLimit, threshold, autoBackground, activeSource, activeCrop]);
+  }, [columns, rows, colorLimit, threshold, autoBackground, activeSource, activeCrop]);
 
   useEffect(() => {
     const handleShortcut = (event) => {
@@ -277,10 +344,11 @@ function App() {
 
   const applyModel = (model = selectedModel) => {
     if (!model) return;
+    const columnCount = clampGridSize(columns, 8, 260, colCount || 18);
     setSelectedModelId(model.id);
     setBeadSize(Number(model.size.x.toFixed(2)));
     setGap(0);
-    setTargetWidth(Number((columns * model.size.x).toFixed(2)));
+    setTargetWidth(Number((columnCount * model.size.x).toFixed(2)));
   };
 
   const processImage = (src, crop = null) => {
@@ -292,17 +360,18 @@ function App() {
       const sy = (source.y / 100) * img.height;
       const sw = (source.w / 100) * img.width;
       const sh = (source.h / 100) * img.height;
-      const rows = Math.max(6, Math.round(columns * (sh / sw)));
+      const outputColumns = clampGridSize(columns, 8, 260, colCount || 18);
+      const outputRows = clampGridSize(rows, 6, 260, rowCount || 18);
       const canvas = document.createElement('canvas');
-      canvas.width = columns;
-      canvas.height = rows;
+      canvas.width = outputColumns;
+      canvas.height = outputRows;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, columns, rows);
-      const data = ctx.getImageData(0, 0, columns, rows).data;
-      const raw = Array.from({ length: rows }, (_, y) =>
-        Array.from({ length: columns }, (_, x) => {
-          const index = (y * columns + x) * 4;
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputColumns, outputRows);
+      const data = ctx.getImageData(0, 0, outputColumns, outputRows).data;
+      const raw = Array.from({ length: outputRows }, (_, y) =>
+        Array.from({ length: outputColumns }, (_, x) => {
+          const index = (y * outputColumns + x) * 4;
           const r = data[index];
           const g = data[index + 1];
           const b = data[index + 2];
@@ -330,11 +399,16 @@ function App() {
     setSelectedModelId('');
   };
 
-  const updateColumns = (value) => {
-    setColumns(value);
+  const commitColumns = () => {
+    const nextColumns = clampGridSize(columns, 8, 260, colCount || 18);
+    setColumns(nextColumns);
     if (selectedModel) {
-      setTargetWidth(Number((value * selectedModel.size.x + Math.max(0, value - 1) * gap).toFixed(2)));
+      setTargetWidth(Number((nextColumns * selectedModel.size.x + Math.max(0, nextColumns - 1) * gap).toFixed(2)));
     }
+  };
+
+  const commitRows = () => {
+    setRows(clampGridSize(rows, 6, 260, rowCount || 18));
   };
 
   const handleUpload = (event) => {
@@ -413,7 +487,111 @@ function App() {
     setCropSource(null);
   };
 
-  const paintCell = (row, col) => {
+  const clearSpecialMarkers = () => {
+    setSpecialMarkers(new Set());
+  };
+
+  const clearMergedBlocks = () => {
+    setMergedBlocks([]);
+  };
+
+  const shiftCellKey = (key, rowOffset, colOffset) => {
+    const { row, col } = parseMarkerKey(key);
+    return markerKey(row + rowOffset, col + colOffset);
+  };
+
+  const addWorkspaceLine = (side) => {
+    const currentCols = colCount || clampGridSize(columns, 8, 260, 8);
+    const currentRows = rowCount || clampGridSize(rows, 6, 260, 6);
+    if ((side === 'top' || side === 'bottom') && currentRows >= 260) {
+      alert('纵向格数最多 260。');
+      return;
+    }
+    if ((side === 'left' || side === 'right') && currentCols >= 260) {
+      alert('横向格数最多 260。');
+      return;
+    }
+
+    skipNextProcessRef.current = true;
+    if (side === 'top') {
+      setGrid((current) => [Array(currentCols).fill(null), ...current]);
+      setRows(currentRows + 1);
+      setSpecialMarkers((current) => new Set([...current].map((key) => shiftCellKey(key, 1, 0))));
+      setMergedBlocks((current) =>
+        current.map((block) => ({ ...block, cells: block.cells.map((key) => shiftCellKey(key, 1, 0)) }))
+      );
+      return;
+    }
+
+    if (side === 'bottom') {
+      setGrid((current) => [...current, Array(currentCols).fill(null)]);
+      setRows(currentRows + 1);
+      return;
+    }
+
+    if (side === 'left') {
+      setGrid((current) => current.map((row) => [null, ...row]));
+      setColumns(currentCols + 1);
+      setSpecialMarkers((current) => new Set([...current].map((key) => shiftCellKey(key, 0, 1))));
+      setMergedBlocks((current) =>
+        current.map((block) => ({ ...block, cells: block.cells.map((key) => shiftCellKey(key, 0, 1)) }))
+      );
+      return;
+    }
+
+    setGrid((current) => current.map((row) => [...row, null]));
+    setColumns(currentCols + 1);
+  };
+
+  const removeMergedBlocksForCell = (row, col) => {
+    const key = markerKey(row, col);
+    setMergedBlocks((current) => current.filter((block) => !block.cells.includes(key)));
+  };
+
+  const createMergedRedBlock = () => {
+    const selected = [...specialMarkers];
+    if (selected.length !== 2) {
+      alert('请先用“标记”工具选择 2 个相邻格子。');
+      return;
+    }
+    const [a, b] = selected.map(parseMarkerKey);
+    const adjacent = Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1;
+    if (!adjacent) {
+      alert('只能选择上下或左右相邻的 2 个格子，用来定位中间红块。');
+      return;
+    }
+    const cells = selected.sort();
+    setMergedBlocks((current) => [
+      ...current.filter((block) => !block.cells.some((cell) => cells.includes(cell))),
+      {
+        id: `${cells.join('_')}_${Date.now()}`,
+        cells
+      }
+    ]);
+    clearSpecialMarkers();
+    setTool('brush');
+    setSelectedColor(MERGED_BLOCK_COLOR);
+  };
+
+  const paintCell = (row, col, mode = 'click') => {
+    if (tool === 'marker') {
+      const key = markerKey(row, col);
+      setSpecialMarkers((current) => {
+        const next = new Set(current);
+        if (mode === 'drag') {
+          if (next.size < 2) next.add(key);
+        } else if (next.has(key)) {
+          next.delete(key);
+        } else {
+          if (next.size >= 2) next.clear();
+          next.add(key);
+        }
+        return next;
+      });
+      return;
+    }
+
+    if (tool !== 'picker') removeMergedBlocksForCell(row, col);
     setGrid((current) =>
       current.map((cells, y) =>
         cells.map((color, x) => {
@@ -448,10 +626,73 @@ function App() {
         ctx.strokeStyle = '#2c6354';
         ctx.lineWidth = 1;
         ctx.strokeRect(x * scale + 0.5, y * scale + 0.5, scale - 1, scale - 1);
+        if (specialMarkers.has(markerKey(y, x))) {
+          ctx.strokeStyle = '#e00020';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x * scale + 3, y * scale + 3, scale - 6, scale - 6);
+        }
       });
+    });
+    mergedBlocks.forEach((block) => {
+      const placement = getMiddleBlockPlacement(block);
+      const offsetX = placement.isHorizontal ? scale / 2 : 0;
+      const offsetY = placement.isVertical ? scale / 2 : 0;
+      ctx.fillStyle = MERGED_BLOCK_COLOR;
+      ctx.fillRect(placement.col * scale + offsetX + 1, placement.row * scale + offsetY + 1, scale - 2, scale - 2);
+      ctx.strokeStyle = '#2c6354';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(placement.col * scale + offsetX + 0.5, placement.row * scale + offsetY + 0.5, scale - 1, scale - 1);
     });
     const link = document.createElement('a');
     link.download = `${fileName || 'qiao-doudou'}-${colCount}x${rowCount}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+
+  const fitTextToCell = (ctx, text, maxWidth, baseSize) => {
+    let size = baseSize;
+    do {
+      ctx.font = `700 ${size}px Arial, "Microsoft YaHei", sans-serif`;
+      if (ctx.measureText(text).width <= maxWidth || size <= 7) return size;
+      size -= 1;
+    } while (size > 7);
+    return size;
+  };
+
+  const exportSequentialNumberPng = () => {
+    const canvas = exportRef.current;
+    if (!canvas) return;
+    const scale = 34;
+    canvas.width = colCount * scale;
+    canvas.height = rowCount * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#111111';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    grid.forEach((row, y) => {
+      row.forEach((color, x) => {
+        if (!isSequentialNumberCell(color)) return;
+        const number = sequentialNumbers.get(markerKey(y, x));
+        if (!number) return;
+        const text = String(number);
+        fitTextToCell(ctx, text, scale - 4, Math.floor(scale * 0.46));
+        ctx.fillText(text, x * scale + scale / 2, y * scale + scale / 2);
+      });
+    });
+    mergedBlocks.forEach((block) => {
+      const number = sequentialNumbers.get(block.id);
+      if (!number) return;
+      const placement = getMiddleBlockPlacement(block);
+      const offsetX = placement.isHorizontal ? scale / 2 : 0;
+      const offsetY = placement.isVertical ? scale / 2 : 0;
+      const text = String(number);
+      fitTextToCell(ctx, text, scale - 4, Math.floor(scale * 0.46));
+      ctx.fillText(text, placement.col * scale + offsetX + scale / 2, placement.row * scale + offsetY + scale / 2);
+    });
+    const link = document.createElement('a');
+    link.download = `${fileName || 'qiao-doudou'}-${colCount}x${rowCount}-sequence-numbers.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -461,13 +702,16 @@ function App() {
       alert('请先扫描并选择一个 STL 模型。');
       return;
     }
+    const mergedCellKeys = new Set(mergedBlocks.flatMap((block) => block.cells));
     const placements = [];
     grid.forEach((row, y) => {
       row.forEach((color, x) => {
-        if (color) placements.push({ x, y });
+        const key = markerKey(y, x);
+        if (sequentialNumbers.has(key) && !mergedCellKeys.has(key)) placements.push({ x, y });
       });
     });
-    if (!placements.length) {
+    const numberedMiddleBlocks = mergedBlocks.filter((block) => sequentialNumbers.has(block.id));
+    if (!placements.length && !numberedMiddleBlocks.length) {
       alert('当前图案没有可导出的有色方块。');
       return;
     }
@@ -478,11 +722,30 @@ function App() {
       return;
     }
     const mesh = parseStlMesh(await response.arrayBuffer());
+    const stepX = cellWidth + gap;
+    const stepY = cellHeight + gap;
+    const instances = placements.map(({ x, y }) => ({
+      tx: x * stepX,
+      ty: y * stepY
+    }));
+    numberedMiddleBlocks.forEach((block) => {
+      const points = block.cells.map(parseMarkerKey);
+      const minRow = Math.min(...points.map((point) => point.row));
+      const maxRow = Math.max(...points.map((point) => point.row));
+      const minCol = Math.min(...points.map((point) => point.col));
+      const maxCol = Math.max(...points.map((point) => point.col));
+      const spanCols = maxCol - minCol + 1;
+      const spanRows = maxRow - minRow + 1;
+      const horizontalOffset = spanCols === 2 ? stepX / 2 : 0;
+      const verticalOffset = spanRows === 2 ? stepY / 2 : 0;
+      instances.push({
+        tx: minCol * stepX + horizontalOffset,
+        ty: minRow * stepY + verticalOffset
+      });
+    });
     const arranged = createArrangedBinaryStl(
       mesh,
-      placements,
-      cellWidth + gap,
-      cellHeight + gap,
+      instances,
       `${fileName}-${selectedModel.name}`
     );
     const blob = new Blob([arranged], { type: 'model/stl' });
@@ -520,6 +783,7 @@ function App() {
     setActiveCrop(null);
     setFileName('snail-demo');
     setColumns(18);
+    setRows(18);
     setSelectedColor('#c61818');
     setHighlightColor(null);
     setSelectedModelId('');
@@ -531,6 +795,9 @@ function App() {
     setAutoBackground(true);
     setShowNumbers(false);
     setShowOverlay(false);
+    setShowCenterGuide(true);
+    clearSpecialMarkers();
+    clearMergedBlocks();
     setOverlayOpacity(45);
     processImage(DEFAULT_REFERENCE, null);
   };
@@ -541,6 +808,9 @@ function App() {
       JSON.stringify({
         grid,
         columns,
+        rows,
+        specialMarkers: [...specialMarkers],
+        mergedBlocks,
         beadSize,
         gap,
         colorLimit,
@@ -638,7 +908,24 @@ function App() {
               <input type="number" value={gap} min="0" max="20" step="0.1" onChange={(e) => setGap(Number(e.target.value))} />
             </Field>
             <Field label="横向格数">
-              <input type="number" value={columns} min="8" max="160" onChange={(e) => updateColumns(Number(e.target.value))} />
+              <input
+                type="number"
+                value={columns}
+                min="8"
+                max="260"
+                onChange={(e) => setColumns(e.target.value)}
+                onBlur={commitColumns}
+              />
+            </Field>
+            <Field label="纵向格数">
+              <input
+                type="number"
+                value={rows}
+                min="6"
+                max="260"
+                onChange={(e) => setRows(e.target.value)}
+                onBlur={commitRows}
+              />
             </Field>
           </div>
 
@@ -656,8 +943,30 @@ function App() {
             <span>自动清除浅色背景</span>
           </label>
           <label className="toggle-row">
-            <input type="checkbox" checked={showNumbers} onChange={(e) => setShowNumbers(e.target.checked)} />
+            <input type="checkbox" checked={showCenterGuide} onChange={(e) => setShowCenterGuide(e.target.checked)} />
+            <span>显示中心参考线</span>
+          </label>
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              checked={showNumbers && numberMode === 'color'}
+              onChange={(e) => {
+                setShowNumbers(e.target.checked);
+                setNumberMode('color');
+              }}
+            />
             <span>显示颜色编号</span>
+          </label>
+          <label className="toggle-row">
+            <input
+              type="checkbox"
+              checked={showNumbers && numberMode === 'sequence'}
+              onChange={(e) => {
+                setShowNumbers(e.target.checked);
+                setNumberMode('sequence');
+              }}
+            />
+            <span>显示顺序编号</span>
           </label>
         </aside>
 
@@ -666,6 +975,7 @@ function App() {
             <ToolButton active={tool === 'brush'} label="画笔" icon={<Paintbrush size={17} />} onClick={() => setTool('brush')} />
             <ToolButton active={tool === 'eraser'} label="橡皮" icon={<Eraser size={17} />} onClick={() => setTool('eraser')} />
             <ToolButton active={tool === 'picker'} label="吸管" icon={<Pipette size={17} />} onClick={() => setTool('picker')} />
+            <ToolButton active={tool === 'marker'} label="标记" icon={<Sparkles size={17} />} onClick={() => setTool('marker')} />
             <ToolButton active={showOverlay} label="原图" icon={<ImageIcon size={17} />} onClick={() => setShowOverlay((value) => !value)} />
             <div className="overlay-control">
               <span>透明度</span>
@@ -703,22 +1013,53 @@ function App() {
                 '--gap': `${Math.max(0, gap)}px`
               }}
             >
+              <button className="workspace-add add-top" onClick={() => addWorkspaceLine('top')} title="在顶部增加 1 行空格" aria-label="在顶部增加一行"><Plus size={18} /></button>
+              <button className="workspace-add add-bottom" onClick={() => addWorkspaceLine('bottom')} title="在底部增加 1 行空格" aria-label="在底部增加一行"><Plus size={18} /></button>
+              <button className="workspace-add add-left" onClick={() => addWorkspaceLine('left')} title="在左侧增加 1 列空格" aria-label="在左侧增加一列"><Plus size={18} /></button>
+              <button className="workspace-add add-right" onClick={() => addWorkspaceLine('right')} title="在右侧增加 1 列空格" aria-label="在右侧增加一列"><Plus size={18} /></button>
               <div className="image-overlay" style={overlayStyle} aria-hidden="true">
                 <img src={overlaySource} alt="" style={overlayImageStyle} draggable="false" />
               </div>
+              {showCenterGuide && (
+                <div className="center-guides" aria-hidden="true">
+                  <span className="center-guide-x" />
+                  <span className="center-guide-y" />
+                </div>
+              )}
+              {mergedBlocks.map((block) => {
+                const placement = getMiddleBlockPlacement(block);
+                return (
+                  <span
+                    className={`merged-red-block ${placement.isHorizontal ? 'middle-horizontal' : ''} ${placement.isVertical ? 'middle-vertical' : ''}`}
+                    key={block.id}
+                    style={{
+                      gridColumn: placement.col + 1,
+                      gridRow: placement.row + 1
+                    }}
+                  >
+                    {showNumbers && numberMode === 'sequence' ? sequentialNumbers.get(block.id) || '' : ''}
+                  </span>
+                );
+              })}
               {grid.map((row, y) =>
                 row.map((color, x) => {
-                  const index = color ? stats.findIndex(([statColor]) => statColor === color) + 1 : '';
+                  const colorIndex = color ? stats.findIndex(([statColor]) => statColor === color) + 1 : '';
+                  const sequenceIndex = sequentialNumbers.get(markerKey(y, x)) || '';
+                  const displayIndex = numberMode === 'sequence' ? sequenceIndex : colorIndex;
                   return (
                     <button
-                      className={`bead-cell ${color && highlightColor === color ? 'highlighted' : ''}`}
+                      className={`bead-cell ${color && highlightColor === color ? 'highlighted' : ''} ${specialMarkers.has(markerKey(y, x)) ? 'marked' : ''}`}
                       key={`${y}-${x}`}
-                      style={{ backgroundColor: color || '#f9fafb' }}
+                      style={{
+                        backgroundColor: color || '#f9fafb',
+                        gridColumn: x + 1,
+                        gridRow: y + 1
+                      }}
                       onClick={() => paintCell(y, x)}
-                      onMouseEnter={(event) => event.buttons === 1 && paintCell(y, x)}
+                      onMouseEnter={(event) => event.buttons === 1 && paintCell(y, x, 'drag')}
                       title={`${x + 1}, ${y + 1} ${color || '空'}`}
                     >
-                      {showNumbers && index ? index : ''}
+                      {showNumbers && displayIndex ? displayIndex : ''}
                     </button>
                   );
                 })
@@ -733,15 +1074,20 @@ function App() {
             <img src={imageSrc} alt="参考图" />
             <div>
               <strong>{fileName}</strong>
-              <span>当前工具：{tool === 'brush' ? '画笔' : tool === 'eraser' ? '橡皮' : '吸管'}</span>
+              <span>当前工具：{tool === 'brush' ? '画笔' : tool === 'eraser' ? '橡皮' : tool === 'picker' ? '吸管' : '选择中间位'}</span>
             </div>
           </div>
           <div className="quick-actions">
             <button onClick={exportPng}><FileImage size={16} />PNG 图纸</button>
+            <button onClick={exportSequentialNumberPng}><FileImage size={16} />编号PNG</button>
             <button onClick={exportArrangedStl}><Box size={16} />STL 模型</button>
             <button onClick={downloadSourceModel}><Download size={16} />下载原模</button>
             <button onClick={() => copyText(modelUrl, '已复制 STL 引用链接')}><Box size={16} />复制链接</button>
-            <button onClick={() => setShowNumbers((v) => !v)}><Eye size={16} />编号</button>
+            <button onClick={() => { setNumberMode('color'); setShowNumbers((v) => !(v && numberMode === 'color')); }}><Eye size={16} />颜色编号</button>
+            <button onClick={() => { setNumberMode('sequence'); setShowNumbers((v) => !(v && numberMode === 'sequence')); }}><Eye size={16} />顺序编号</button>
+            <button onClick={createMergedRedBlock}><Sparkles size={16} />生成中间块</button>
+            <button onClick={clearSpecialMarkers}><Sparkles size={16} />清除标记</button>
+            <button onClick={clearMergedBlocks}><Eraser size={16} />清除中间块</button>
             <button onClick={() => fileRef.current?.click()}><Wand2 size={16} />换图</button>
             <button onClick={saveDraft}><Save size={16} />本地草稿</button>
             <button className="donate-action" onClick={() => setDonationOpen(true)}><Heart size={16} />打赏支持</button>
@@ -750,6 +1096,7 @@ function App() {
           <div className="model-summary">
             <strong>排布规则</strong>
             <span>每个有颜色的格子对应 1 个 STL 方块；当前按 {formatMm(cellWidth)} x {formatMm(cellHeight)} mm 排列，模型间距 {formatMm(gap)} mm。</span>
+            <span>已选择：{specialMarkers.size} 个；中间红块：{mergedBlocks.length} 个。红块会显示在两个格子之间，STL 使用原模型放在两格中间，不拉伸模型。</span>
             {selectedModel && (
               <div className="model-link-box">
                 <code>{modelUrl}</code>
@@ -786,6 +1133,11 @@ function App() {
 
       {donationOpen && (
         <div className="donation-modal" role="dialog" aria-modal="true" aria-label="制作不易欢迎打赏">
+          <div className="donation-bubbles" aria-hidden="true">
+            {Array.from({ length: 18 }, (_, index) => (
+              <span key={index} />
+            ))}
+          </div>
           <div className="donation-dialog">
             <button className="icon-btn donation-close" onClick={() => setDonationOpen(false)} aria-label="关闭打赏">
               <X size={18} />
