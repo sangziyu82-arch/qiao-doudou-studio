@@ -73,17 +73,32 @@ const parseStl = (buffer) => {
   return parseAsciiStl(buffer);
 };
 
-const files = (await readdir(sourceDir, { withFileTypes: true }))
-  .filter((entry) => entry.isFile() && extname(entry.name).toLowerCase() === '.stl')
-  .map((entry) => entry.name);
+const readStlEntries = async (dir) => {
+  try {
+    return (await readdir(dir, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && extname(entry.name).toLowerCase() === '.stl')
+      .map((entry) => ({
+        file: entry.name,
+        fullPath: join(dir, entry.name)
+      }));
+  } catch {
+    return [];
+  }
+};
+
+const fileEntries = new Map();
+(await readStlEntries(sourceDir)).forEach((entry) => fileEntries.set(entry.file, entry));
+(await readStlEntries(publicModelsDir)).forEach((entry) => {
+  if (!fileEntries.has(entry.file)) fileEntries.set(entry.file, entry);
+});
 
 const models = [];
 await mkdir(publicModelsDir, { recursive: true });
-for (const file of files) {
-  const fullPath = join(sourceDir, file);
+for (const { file, fullPath } of fileEntries.values()) {
   const buffer = await readFile(fullPath);
   const parsed = parseStl(buffer);
-  await copyFile(fullPath, join(publicModelsDir, file));
+  const publicPath = join(publicModelsDir, file);
+  if (fullPath !== publicPath) await copyFile(fullPath, publicPath);
   models.push({
     id: basename(file, extname(file)),
     name: basename(file, extname(file)),
