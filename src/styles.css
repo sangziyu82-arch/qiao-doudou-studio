@@ -625,6 +625,42 @@ button {
   transform: translateY(-50%);
 }
 
+.count-guide {
+  position: relative;
+  z-index: 8;
+  align-self: center;
+  justify-self: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  display: inline-grid;
+  place-items: center;
+  color: #071017;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.72), transparent 0 12%, transparent 13%),
+    linear-gradient(135deg, #ffe45e 0%, #b2ff51 48%, #00f5d4 100%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.24),
+    0 0 18px rgba(0, 245, 212, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  pointer-events: none;
+}
+
+.count-col {
+  align-self: start;
+  transform: translateY(3px);
+}
+
+.count-row {
+  justify-self: start;
+  transform: translateX(3px);
+}
+
 .merged-red-block {
   position: relative;
   z-index: 6;

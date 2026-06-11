@@ -221,6 +221,7 @@ function App() {
   const [numberMode, setNumberMode] = useState('color');
   const [showOverlay, setShowOverlay] = useState(false);
   const [showCenterGuide, setShowCenterGuide] = useState(true);
+  const [showCountGuides, setShowCountGuides] = useState(true);
   const [overlayOpacity, setOverlayOpacity] = useState(45);
   const [donationOpen, setDonationOpen] = useState(true);
   const [tool, setTool] = useState('brush');
@@ -286,6 +287,27 @@ function App() {
         map.set(entry.key, index + 1);
       });
     return map;
+  }, [grid, mergedBlocks]);
+
+  const countGuides = useMemo(() => {
+    const rowCounts = Array(grid.length).fill(0);
+    const colCounts = Array(grid[0]?.length || 0).fill(0);
+
+    grid.forEach((row, y) => {
+      row.forEach((color, x) => {
+        if (!isSequentialNumberCell(color)) return;
+        rowCounts[y] += 1;
+        colCounts[x] += 1;
+      });
+    });
+
+    mergedBlocks.forEach((block) => {
+      const placement = getMiddleBlockPlacement(block);
+      if (rowCounts[placement.row] !== undefined) rowCounts[placement.row] += 1;
+      if (colCounts[placement.col] !== undefined) colCounts[placement.col] += 1;
+    });
+
+    return { rowCounts, colCounts };
   }, [grid, mergedBlocks]);
 
   const rowCount = grid.length || 0;
@@ -796,6 +818,7 @@ function App() {
     setShowNumbers(false);
     setShowOverlay(false);
     setShowCenterGuide(true);
+    setShowCountGuides(true);
     clearSpecialMarkers();
     clearMergedBlocks();
     setOverlayOpacity(45);
@@ -947,6 +970,10 @@ function App() {
             <span>显示中心参考线</span>
           </label>
           <label className="toggle-row">
+            <input type="checkbox" checked={showCountGuides} onChange={(e) => setShowCountGuides(e.target.checked)} />
+            <span>显示行列计数</span>
+          </label>
+          <label className="toggle-row">
             <input
               type="checkbox"
               checked={showNumbers && numberMode === 'color'}
@@ -1026,6 +1053,30 @@ function App() {
                   <span className="center-guide-y" />
                 </div>
               )}
+              {showCountGuides && countGuides.colCounts.map((count, x) => (
+                count > 0 ? (
+                  <span
+                    className="count-guide count-col"
+                    key={`col-count-${x}`}
+                    style={{ gridColumn: x + 1, gridRow: 1 }}
+                    title={`第 ${x + 1} 列：${count} 个有颜色色块`}
+                  >
+                    {count}
+                  </span>
+                ) : null
+              ))}
+              {showCountGuides && countGuides.rowCounts.map((count, y) => (
+                count > 0 ? (
+                  <span
+                    className="count-guide count-row"
+                    key={`row-count-${y}`}
+                    style={{ gridColumn: 1, gridRow: y + 1 }}
+                    title={`第 ${y + 1} 行：${count} 个有颜色色块`}
+                  >
+                    {count}
+                  </span>
+                ) : null
+              ))}
               {mergedBlocks.map((block) => {
                 const placement = getMiddleBlockPlacement(block);
                 return (
