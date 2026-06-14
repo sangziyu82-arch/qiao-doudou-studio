@@ -33,6 +33,10 @@ const DONATE_WECHAT = publicAsset('donate-wechat.jpg');
 const DONATE_ALIPAY = publicAsset('donate-alipay.jpg');
 const EMPTY_CELL_COLOR = '#ffffff';
 const MERGED_BLOCK_COLOR = '#ff0000';
+const NUMBER_EXPORT_SIZES = {
+  '2k': 2048,
+  '4k': 4096
+};
 const makeEmptyGrid = (rows = 18, cols = 18) => Array.from({ length: rows }, () => Array(cols).fill(null));
 const isSequentialNumberCell = (color) => Boolean(color) && color.toLowerCase() !== EMPTY_CELL_COLOR;
 const clampGridSize = (value, min, max, fallback) => {
@@ -219,6 +223,7 @@ function App() {
   const [autoBackground, setAutoBackground] = useState(true);
   const [showNumbers, setShowNumbers] = useState(false);
   const [numberMode, setNumberMode] = useState('color');
+  const [numberExportSize, setNumberExportSize] = useState('2k');
   const [showOverlay, setShowOverlay] = useState(false);
   const [showCenterGuide, setShowCenterGuide] = useState(true);
   const [showCountGuides, setShowCountGuides] = useState(true);
@@ -684,7 +689,9 @@ function App() {
   const exportSequentialNumberPng = () => {
     const canvas = exportRef.current;
     if (!canvas) return;
-    const scale = 34;
+    const targetSize = NUMBER_EXPORT_SIZES[numberExportSize] || NUMBER_EXPORT_SIZES['2k'];
+    const longestSide = Math.max(colCount, rowCount, 1);
+    const scale = Math.max(34, Math.floor(targetSize / longestSide));
     canvas.width = colCount * scale;
     canvas.height = rowCount * scale;
     const ctx = canvas.getContext('2d');
@@ -714,7 +721,7 @@ function App() {
       ctx.fillText(text, placement.col * scale + offsetX + scale / 2, placement.row * scale + offsetY + scale / 2);
     });
     const link = document.createElement('a');
-    link.download = `${fileName || 'qiao-doudou'}-${colCount}x${rowCount}-sequence-numbers.png`;
+    link.download = `${fileName || 'qiao-doudou'}-${colCount}x${rowCount}-sequence-numbers-${numberExportSize}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -1130,6 +1137,13 @@ function App() {
           </div>
           <div className="quick-actions">
             <button onClick={exportPng}><FileImage size={16} />PNG 图纸</button>
+            <label className="export-size-control">
+              <span>编号清晰度</span>
+              <select value={numberExportSize} onChange={(event) => setNumberExportSize(event.target.value)}>
+                <option value="2k">2K</option>
+                <option value="4k">4K</option>
+              </select>
+            </label>
             <button onClick={exportSequentialNumberPng}><FileImage size={16} />编号PNG</button>
             <button onClick={exportArrangedStl}><Box size={16} />STL 模型</button>
             <button onClick={downloadSourceModel}><Download size={16} />下载原模</button>

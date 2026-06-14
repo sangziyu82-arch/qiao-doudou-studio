@@ -780,6 +780,36 @@ button {
   font-size: 13px;
 }
 
+.export-size-control {
+  height: 36px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  color: #253430;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.export-size-control span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.export-size-control select {
+  width: 100%;
+  height: 26px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-weight: 800;
+}
+
 .palette-list {
   display: grid;
   gap: 7px;
@@ -1574,6 +1604,7 @@ body {
 .ghost-btn,
 .tool-btn,
 .quick-actions button,
+.export-size-control,
 .icon-btn,
 .ghost-action {
   color: #eaf7ff;
@@ -1586,6 +1617,7 @@ body {
 .ghost-btn:hover,
 .tool-btn:hover,
 .quick-actions button:hover,
+.export-size-control:focus-within,
 .icon-btn:hover,
 .ghost-action:hover {
   transform: translateY(-1px);
@@ -1804,15 +1836,28 @@ body {
   color: #eff7ff;
 }
 
-.quick-actions button:nth-child(1) {
+.export-size-control {
+  color: #eff7ff;
+}
+
+.export-size-control select {
+  color: #eff7ff;
+}
+
+.export-size-control option {
+  color: #101820;
+  background: #ffffff;
+}
+
+.quick-actions button:nth-of-type(1) {
   border-color: rgba(0, 245, 212, 0.32);
 }
 
-.quick-actions button:nth-child(2) {
+.quick-actions button:nth-of-type(2) {
   border-color: rgba(255, 228, 94, 0.32);
 }
 
-.quick-actions button:nth-child(3) {
+.quick-actions button:nth-of-type(3) {
   border-color: rgba(255, 61, 129, 0.32);
 }
 
